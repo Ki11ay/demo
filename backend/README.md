@@ -38,7 +38,41 @@ A serverless CRUD (Create, Read, Update, Delete) application built with TypeScri
 - AWS CLI configured
 - Terraform installed
 
-## Getting Started
+## CI/CD Pipeline (Recommended)
+
+A GitHub Actions workflow (`.github/workflows/deploy.yml`) automates the full
+build-and-deploy lifecycle so you never have to run Terraform manually.
+
+### How it works
+
+| Trigger | Jobs executed |
+|---|---|
+| Pull request → `main` | **Test & Build** → **Terraform Plan** (dry-run, no changes applied) |
+| Push / merge → `main` | **Test & Build** → **Terraform Apply** (deploys to AWS) |
+
+### Required GitHub Secrets
+
+Add the following secrets to your repository
+(**Settings → Secrets and variables → Actions**):
+
+| Secret | Description |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | IAM user or role access key with deploy permissions |
+| `AWS_SECRET_ACCESS_KEY` | Corresponding secret access key |
+
+### Pipeline Stages
+
+1. **Test & Build** – installs Node dependencies, runs Jest unit tests, and
+   bundles all Lambda handlers with esbuild.  The compiled `dist/` artefacts are
+   uploaded so downstream jobs can use them without rebuilding.
+2. **Terraform Plan** *(PR only)* – initialises Terraform, validates the
+   configuration, and produces a plan so reviewers can see infrastructure
+   changes before merging.
+3. **Terraform Apply** *(main branch only)* – applies the validated plan to AWS.
+   Runs in the `production` GitHub Environment, which can be configured with
+   required reviewers for an additional approval gate.
+
+## Local Development
 
 ### 1. Install Dependencies
 ```bash
@@ -55,7 +89,7 @@ npm test
 npm run build
 ```
 
-### 4. Deploy with Terraform
+### 4. Deploy with Terraform (manual)
 ```bash
 cd terraform
 terraform init
