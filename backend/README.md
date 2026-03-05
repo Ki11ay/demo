@@ -4,35 +4,38 @@ A serverless CRUD (Create, Read, Update, Delete) application built with TypeScri
 
 ## Architecture
 - **API Gateway (HTTP API):** Entry point for RESTful requests.
-- **AWS Lambda:** Individual TypeScript functions for each CRUD operation.
-- **DynamoDB:** NoSQL database for item storage.
-- **EventBridge:** Custom Event Bus to broadcast item lifecycle events (`ItemCreated`, `ItemUpdated`, `ItemDeleted`).
-- **CloudWatch Logs:** Catch-all rule logs all events from the custom bus for auditing.
+- **AWS Lambda:** Individual TypeScript functions acting as thin controllers.
+- **Service Layer:** Business logic moved to `ItemService` for reusability and testability.
+- **DynamoDB:** NoSQL database with **conditional writes** for data integrity.
+- **EventBridge:** Custom Event Bus to broadcast item lifecycle events.
+- **CloudWatch Logs:** Logs all events for auditing.
 
 ## Project Structure
 ```text
 ├── src/
-│   ├── handlers/          # Lambda function entry points
-│   │   ├── createItem.ts  # POST /items
-│   │   ├── getItem.ts     # GET /items/{id}
-│   │   ├── updateItem.ts  # PUT /items/{id}
-│   │   └── deleteItem.ts  # DELETE /items/{id}
-│   └── services/
-│       └── aws.ts         # Shared AWS SDK v3 clients
+│   ├── handlers/          # Thin Controllers (APIGateway Handlers)
+│   │   └── __tests__/     # Unit tests (Jest + AWS Mock)
+│   ├── services/          # Business Logic & Infrastructure
+│   │   ├── aws.ts         # AWS SDK v3 clients
+│   │   └── items.service.ts # DynamoDB + EventBridge logic
+│   ├── types/             # Shared TypeScript Interfaces
+│   └── utils/             # Validation & API helpers
 ├── terraform/             # Infrastructure as Code
-│   ├── main.tf            # Provider configuration
-│   ├── dynamodb.tf        # Table definitions
-│   ├── eventbridge.tf     # Bus, Rules, and Logging
-│   ├── lambda.tf          # Function definitions & bundling
-│   ├── api_gateway.tf     # HTTP API & Routes
-│   └── iam.tf             # Permissions and Roles
 ├── build.mjs              # esbuild bundling script
+├── smoke-test.sh          # Integration test script
 └── package.json           # Dependencies and scripts
 ```
 
+## Features
+- **Validation:** Shared utility for safe body parsing and schema validation.
+- **Conditional Writes:**
+  - `POST /items`: Fails with **409 Conflict** if ID already exists.
+  - `PUT/DELETE`: Fails with **404 Not Found** if ID does not exist.
+- **Security:** Raw internal errors are hidden; clients receive clean error messages.
+
 ## Prerequisites
 - Node.js 20+
-- AWS CLI configured with appropriate permissions
+- AWS CLI configured
 - Terraform installed
 
 ## Getting Started
@@ -42,19 +45,29 @@ A serverless CRUD (Create, Read, Update, Delete) application built with TypeScri
 npm install
 ```
 
-### 2. Build and Bundle
-This step uses `esbuild` to compile TypeScript and bundle dependencies into the `dist/` folder.
+### 2. Run Tests
+```bash
+npm test
+```
+
+### 3. Build and Bundle
 ```bash
 npm run build
 ```
 
-### 3. Deploy with Terraform
+### 4. Deploy with Terraform
 ```bash
 cd terraform
 terraform init
 terraform apply
 ```
-After completion, Terraform will output the `api_endpoint`.
+
+### 5. Integration Smoke Test
+After deployment, run the smoke test script with your API URL:
+```bash
+chmod +x smoke-test.sh
+./smoke-test.sh <api_endpoint_url>
+```
 
 ## API Usage
 
@@ -75,14 +88,9 @@ After completion, Terraform will output the `api_endpoint`.
 **PUT** `/items/123`
 ```json
 {
-  "name": "Updated Name",
-  "description": "New description"
+  "name": "Updated Name"
 }
 ```
 
 ### Delete an Item
 **DELETE** `/items/123`
-
-## Event Monitoring
-Whenever an item is modified, an event is sent to the custom EventBridge bus. You can view these events in the CloudWatch Log Group:
-`/aws/events/demo-crud-events`

@@ -1,56 +1,24 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
-import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { ddbDocClient, ebClient } from "../services/aws";
-
-const TABLE_NAME = process.env.TABLE_NAME || "ItemsTable";
-const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || "default";
+import { itemService } from "../services/items.service";
+import { parseBody, createResponse, validateCreateItem } from "../utils/api";
+import { CreateItemInput } from "../types/item";
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
-  const body = JSON.parse(event.body || "{}");
-  const { id, name, description } = body;
+  const body = parseBody<CreateItemInput>(event.body);
+  const errors = validateCreateItem(body);
 
-  if (!id || !name) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: "id and name are required" }),
-    };
+  if (errors.length > 0) {
+    return createResponse(400, { message: "Validation failed", errors });
   }
 
-  const item = { id, name, description, createdAt: new Date().toISOString() };
-
   try {
-    // 1. Save to DynamoDB
-    await ddbDocClient.send(
-      new PutCommand({
-        TableName: TABLE_NAME,
-        Item: item,
-      })
-    );
-
-    // 2. Publish event to EventBridge
-    await ebClient.send(
-      new PutEventsCommand({
-        Entries: [
-          {
-            Source: "myapp.items",
-            DetailType: "ItemCreated",
-            Detail: JSON.stringify(item),
-            EventBusName: EVENT_BUS_NAME,
-          },
-        ],
-      })
-    );
-
-    return {
-      statusCode: 201,
-      body: JSON.stringify(item),
-    };
+    const item = await itemService.createItem(body!);
+    return createResponse(201, item);
   } catch (error: any) {
+    if (error.name === "ConditionalCheckFailedException") {
+      return createResponse(409, { message: `Item with id ${body!.id} already exists` });
+    }
     console.error("Error creating item:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Internal server error", error: error.message }),
-    };
+    return createResponse(500, { message: "Internal server error" });
   }
 };
