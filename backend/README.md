@@ -5,7 +5,7 @@ A serverless CRUD (Create, Read, Update, Delete) application built with TypeScri
 ## Architecture
 - **API Gateway (HTTP API):** Entry point for RESTful requests.
 - **AWS Lambda:** Individual TypeScript functions acting as thin controllers.
-- **Service Layer:** Business logic moved to `ItemService` for reusability and testability.
+- **Service Layer:** Business logic in `ItemService` for reusability and testability.
 - **DynamoDB:** NoSQL database with **conditional writes** for data integrity.
 - **EventBridge:** Custom Event Bus to broadcast item lifecycle events.
 - **CloudWatch Logs:** Logs all events for auditing.
@@ -26,17 +26,56 @@ A serverless CRUD (Create, Read, Update, Delete) application built with TypeScri
 └── package.json           # Dependencies and scripts
 ```
 
-## Features
-- **Validation:** Shared utility for safe body parsing and schema validation.
-- **Conditional Writes:**
-  - `POST /items`: Fails with **409 Conflict** if ID already exists.
-  - `PUT/DELETE`: Fails with **404 Not Found** if ID does not exist.
-- **Security:** Raw internal errors are hidden; clients receive clean error messages.
+## Infrastructure & AWS Services
+The application is deployed using Terraform and utilizes the following AWS services:
+
+### 1. API Gateway (HTTP API)
+- **Endpoint:** Exposes the Lambda functions via a public URL.
+- **Routes:**
+  - `POST /items`: Invokes `createItem`
+  - `GET /items/{id}`: Invokes `getItem`
+  - `PUT /items/{id}`: Invokes `updateItem`
+  - `DELETE /items/{id}`: Invokes `deleteItem`
+
+### 2. AWS Lambda
+- **Runtime:** Node.js 20.x
+- **Architecture:** Individual zip files bundled via `esbuild`.
+- **Permissions:** Configured with IAM roles allowing access to DynamoDB and EventBridge.
+
+### 3. DynamoDB
+- **Table:** `demo-crud-items`
+- **Partition Key:** `id` (String)
+- **Billing Mode:** Pay-per-request (on-demand)
+- **Features:** Conditional writes used to prevent duplicate IDs and ensure atomicity.
+
+### 4. EventBridge
+- **Event Bus:** Custom bus named `demo-crud-bus`.
+- **Events:**
+  - `Source: myapp.items`
+  - `DetailType: ItemCreated | ItemUpdated | ItemDeleted`
+- **Consumer:** A CloudWatch Log Group logs all events for auditing purposes.
+
+### 5. CloudWatch Logs
+- **Lambda Logs:** `/aws/lambda/demo-crud-*`
+- **Event Logs:** `/aws/events/demo-crud-events`
+
+## Infrastructure Deployment (Terraform)
+The Terraform configuration is modularized into several files for clarity:
+- `main.tf`: AWS provider and region setup.
+- `variables.tf`: Project naming and region variables.
+- `dynamodb.tf`: Table definition.
+- `eventbridge.tf`: Custom bus, catch-all rules, and log targets.
+- `lambda.tf`: Function definitions, code archiving, and environment variables.
+- `api_gateway.tf`: HTTP API, routes, integrations, and permissions.
+- `iam.tf`: Roles and policies for Lambda execution.
+- `outputs.tf`: Exports the final API endpoint URL.
 
 ## Prerequisites
 - Node.js 20+
-- AWS CLI configured
-- Terraform installed
+- **AWS CLI**: Installed and configured.
+  - To configure, run: `aws configure`
+  - Ensure your IAM user has permissions for Lambda, DynamoDB, EventBridge, IAM, and API Gateway.
+- **Terraform**: Installed.
 
 ## Getting Started
 
@@ -63,10 +102,12 @@ terraform apply
 ```
 
 ### 5. Integration Smoke Test
-After deployment, run the smoke test script with your API URL:
+After deployment, run the smoke test script with your API URL. 
+
+Example using the existing endpoint:
 ```bash
 chmod +x smoke-test.sh
-./smoke-test.sh <api_endpoint_url>
+./smoke-test.sh "https://oga5v053w1.execute-api.us-east-1.amazonaws.com"
 ```
 
 ## API Usage
