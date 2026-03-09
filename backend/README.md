@@ -14,12 +14,14 @@ A serverless CRUD (Create, Read, Update, Delete) application built with TypeScri
 ```text
 ├── src/
 │   ├── handlers/          # Thin Controllers (APIGateway Handlers)
-│   │   └── __tests__/     # Unit tests (Jest + AWS Mock)
+│   │   └── __tests__/     # Unit & E2E tests (Jest + AWS Mock)
 │   ├── services/          # Business Logic & Infrastructure
+│   │   ├── __tests__/     # Service layer unit tests
 │   │   ├── aws.ts         # AWS SDK v3 clients
 │   │   └── items.service.ts # DynamoDB + EventBridge logic
 │   ├── types/             # Shared TypeScript Interfaces
 │   └── utils/             # Validation & API helpers
+│       └── __tests__/     # Utility unit tests
 ├── terraform/             # Infrastructure as Code
 ├── build.mjs              # esbuild bundling script
 ├── smoke-test.sh          # Integration test script
@@ -85,6 +87,11 @@ npm install
 ```
 
 ### 2. Run Tests
+The project includes a comprehensive test suite using **Jest** and **aws-sdk-client-mock**:
+- **Unit Tests:** For services and utility functions.
+- **Handler Tests:** Individual tests for each Lambda entry point.
+- **E2E Mimicry:** A suite that simulates a full item lifecycle through the handlers using realistic API Gateway events.
+
 ```bash
 npm test
 ```
